@@ -3,7 +3,8 @@ Lightweight c++11 header-only library with commonly used UQ tools
 
 ### Dependencies
 
-* eigen3 (header-only library included as git submodule in external/eigen)
+* Eigen3, a header-only linear-algebra library (included as git submodule)
+  * After you clone the repository, run `git submodule init` and `git submodule update` to automatically grab the library.
 
 ### Overview
 
