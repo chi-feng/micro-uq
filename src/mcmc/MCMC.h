@@ -1,6 +1,7 @@
 #ifndef MCMC_h
 #define MCMC_h
 
+#include <iostream>
 #include <memory>
 #include <functional>
 #include <Eigen/Core>
@@ -15,6 +16,7 @@ private:
   int dim;
   Eigen::MatrixXd cov;
   Eigen::LLT<Eigen::MatrixXd> llt;
+  Eigen::MatrixXd L; // matrixL of LLT of covariance
   double constant, logdet;
 
 public:
@@ -22,7 +24,8 @@ public:
   inline void SetCovariance(const Eigen::MatrixXd& cov) {
     this->cov = cov;
     llt = cov.llt();
-    logdet = log(llt.matrixL().diagonal().array()).sum();
+    L = llt.matrixL();
+    logdet = log(L.diagonal().array()).sum();
   }
 
   GaussianProposal(const Eigen::MatrixXd& cov)
@@ -32,8 +35,8 @@ public:
     constant = -0.5 * log(2.0 * M_PI) * dim;
   }
 
-  inline Eigen::VectorXd& GetProposal(std::shared_ptr<RandomGenerator> rng) {
-    return llt.matrixL() * rng->GetNormalRandomVector(dim);
+  inline Eigen::VectorXd GetProposal(std::shared_ptr<RandomGenerator> rng) {
+    return L * rng->GetNormalRandomVector(dim);
   }
 
   inline double LogDensity(const Eigen::VectorXd& x) {
@@ -55,8 +58,8 @@ class MCMC {
 
     int accepted;
 
-    std::unique_ptr<GaussianProposal> mhProposalDist;
-    std::unique_ptr<GaussianProposal> amProposalDist;
+    std::shared_ptr<GaussianProposal> mhProposalDist;
+    std::shared_ptr<GaussianProposal> amProposalDist;
 
     int adaptStride;
     double adaptProb;
@@ -80,8 +83,8 @@ class MCMC {
     {
       adaptStride    = 10 * dim;
       adaptProb      = 0.9;
-      mhProposalDist = std::make_unique<GaussianProposal>(Eigen::MatrixXd::Identity(dim, dim));
-      amProposalDist = std::make_unique<GaussianProposal>(Eigen::MatrixXd::Identity(dim, dim));
+      mhProposalDist = std::make_shared<GaussianProposal>(Eigen::MatrixXd::Identity(dim, dim));
+      amProposalDist = std::make_shared<GaussianProposal>(Eigen::MatrixXd::Identity(dim, dim));
       Reset();
     }
 
@@ -90,18 +93,18 @@ class MCMC {
       chain           = Eigen::MatrixXd::Zero(dim, N);
       logDensities    = Eigen::VectorXd::Zero(N);
       logDensities(0) = LogDensityFuncHandle(chain.col(0));
-      for (int i = 0; i < N; ++i) {
+      for (int i = 1; i < N; ++i) {
         if (i > adaptStride && i % adaptStride == 0) {
           auto newSamps = chain.block(0, i - adaptStride, dim, adaptStride);
           chainScatter += newSamps * newSamps.transpose();
           chainSum   += newSamps.rowwise().sum();
           amProposalDist->SetCovariance(2.4 / dim * (chainScatter - chainSum * chainSum.transpose() / i) / i);
         }
-        chain.col(i) = (RandomGenerator::GetUniform() < adaptProb)
+        chain.col(i) = (rng->GetUniform() < adaptProb)
                        ? chain.col(i - 1) + amProposalDist->GetProposal(rng)
                        : chain.col(i - 1) + mhProposalDist->GetProposal(rng);
         logDensities(i) = LogDensityFuncHandle(chain.col(i));
-        if (log(RandomGenerator::GetUniform()) < logDensities(i) - logDensities(i - 1)) {
+        if (log(rng->GetUniform()) < logDensities(i) - logDensities(i - 1)) {
           accepted++;
         } else {
           chain.col(i)    = chain.col(i - 1);
@@ -124,7 +127,6 @@ class MCMC {
     inline Eigen::MatrixXd GetChain()           { return chain.transpose(); }
     inline Eigen::VectorXd GetLogDensities()    { return logDensities; }
     inline double          GetAcceptanceRatio() { return static_cast<double>(accepted) / chain.cols(); }
-    inline Eigen::MatrixXd GetAdaptiveCov()     { return amProposalDist->GetCovariance(); }
 };
 
 #endif // ifndef MCMC_h

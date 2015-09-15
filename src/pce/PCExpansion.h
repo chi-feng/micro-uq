@@ -11,7 +11,7 @@
 
 #include "Quadrature1D.h"
 #include "Polynomial1D.h"
-#include "MultiindexSet.h"
+#include "MultiIndexSet.h"
 
 class PCExpansion {
   public:

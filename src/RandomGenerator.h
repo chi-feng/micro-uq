@@ -1,3 +1,6 @@
+#ifndef RandomGenerator_h
+#define RandomGenerator_h
+
 #include <random>
 #include <Eigen/Core>
 
@@ -33,4 +36,6 @@ public:
       result(i) = GetNormal();
     return result;
   }
-}
+};
+
+#endif
